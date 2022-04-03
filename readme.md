@@ -1,7 +1,7 @@
 # spring4shell\_scanner
 
 Network scanner based on Tokio async runtime for detecting spring4shell
-vulnerability. The scanner currently supports GET and POST request.
+vulnerability. Currently it supports GET and POST request.
 The scanner will read target endpoints from stdin and takes an optional number
 of tasks via cli parameter (default is 10).
 
