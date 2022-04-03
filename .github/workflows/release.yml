@@ -25,7 +25,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-           target/release/spring4shell_scanner
+           target/release/spring4shell-scanner
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -50,7 +50,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: target/release/spring4shell_scanner.exe
+          files: target/release/spring4shell-scanner.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
