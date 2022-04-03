@@ -1,11 +1,11 @@
 # spring4shell\_scanner
 
-Network scanner based on Tokio async runtime for detecting spring4shell
-vulnerability. Currently it supports GET and POST request.
-The scanner will read target endpoints from stdin and takes an optional number
+Network scanner based on Tokio async runtime for detecting the spring4shell
+vulnerability (CVE-2022-22965). Currently GET and POST request are checked.
+The scanner will read target endpoints from stdin and takes the optional number
 of tasks via cli parameter (default is 10).
 
-The detection is based on the method posted by RandoriAttack:
+The detection method is based on the curl command posted by RandoriAttack:
 
 - https://twitter.com/RandoriAttack/status/1509298490106593283
 
@@ -13,7 +13,12 @@ The detection is based on the method posted by RandoriAttack:
 ## Build
 
 ```sh
-cargo build --release
+$ cargo build --release
+
+# or for static build
+
+$ rustup target install x86_64-unknown-linux-musl
+$ cargo build --release --target x86_64-unknown-linux-musl
 ```
 
 
