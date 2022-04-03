@@ -135,7 +135,7 @@ async fn main() -> Result<()> {
             }
         })
         .buffer_unordered(num_tasks as usize)
-        .flat_map(|finding| stream::iter(finding))
+        .flat_map(stream::iter)
         .collect::<Vec<Finding>>()
         .await;
 
