@@ -19,7 +19,7 @@ jobs:
           default: true
           override: true
       - name: Build
-        run: cargo build --all --release
+        run: cargo build --all --release && strip target/release/spring4shell-scanner
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
