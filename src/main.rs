@@ -3,7 +3,6 @@ use futures::stream::{self, StreamExt};
 //use async_std::io;
 //use surf::{Client, StatusCode, Response};
 use reqwest::{Client, ClientBuilder, Response, StatusCode};
-use std::sync::Arc;
 use tokio::io::{self, AsyncBufReadExt};
 use tokio_stream::wrappers::LinesStream;
 
@@ -95,12 +94,10 @@ async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let num_tasks: u16 = args.get(1).unwrap_or(&"10".into()).parse()?;
 
-    let client = Arc::new(
-        ClientBuilder::new()
+    let client = ClientBuilder::new()
             .user_agent(USER_AGENT)
             .danger_accept_invalid_certs(true)
-            .build()?,
-    );
+            .build()?;
 
     let clients_stream = stream::iter(std::iter::repeat(1).map(|_| client.clone()));
 
