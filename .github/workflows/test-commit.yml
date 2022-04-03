@@ -30,7 +30,6 @@ jobs:
       - name: Build
         run: |
             cargo build --all --release
-            find /home/runner/work/spring4shell-scanner/spring4shell-scanner -ls
-            strip /home/runner/work/spring4shell-scanner/spring4shell-scanner/target/x86_64-unknown-linux-musl/release/spring4shell-scanner
+            strip target/release/spring4shell-scanner
 
 
