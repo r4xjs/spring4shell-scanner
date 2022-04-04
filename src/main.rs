@@ -97,6 +97,7 @@ async fn main() -> Result<()> {
     let client = ClientBuilder::new()
             .user_agent(USER_AGENT)
             .danger_accept_invalid_certs(true)
+            .danger_accept_invalid_hostnames(true)
             .build()?;
 
     let clients_stream = stream::iter(std::iter::repeat(1).map(|_| client.clone()));
@@ -120,10 +121,22 @@ async fn main() -> Result<()> {
         })
         .buffer_unordered(num_tasks as usize)
         .flat_map(stream::iter)
+        .inspect(|finding| {
+             match finding {
+                Finding::Get(url) => log::info!("Found: GET {}", url),
+                Finding::Post(url) => log::info!("Found: POST {}", url),
+             };
+        })
         .collect::<Vec<Finding>>()
         .await;
 
-    dbg!(findings);
+    println!("Final Result List:");
+    for finding in &findings {
+        match finding {
+            Finding::Get(url) => println!("GET {}", url),
+            Finding::Post(url) => println!("POST {}", url),
+        };
+    }
 
     Ok(())
 }
