@@ -1,7 +1,6 @@
+use std::time::Duration;
+
 use futures::stream::{self, StreamExt};
-//use async_std::io::prelude::*;
-//use async_std::io;
-//use surf::{Client, StatusCode, Response};
 use reqwest::{Client, ClientBuilder, Response, StatusCode};
 use tokio::io::{self, AsyncBufReadExt};
 use tokio_stream::wrappers::LinesStream;
@@ -31,8 +30,12 @@ async fn do_post_request(client: &Client, target: &str, vector: &str) -> Result<
     Ok(res)
 }
 
-async fn do_get_request(client: &Client, target: &str, vector: &str) -> Result<Response> {
-    let res = client.get(format!("{}?{}", target, vector)).send().await?;
+async fn do_get_request(
+    client: &Client,
+    target: &str,
+    vector: &[(&str, &str)],
+) -> Result<Response> {
+    let res = client.get(target).query(vector).send().await?;
 
     Ok(res)
 }
@@ -43,18 +46,20 @@ async fn check(client: &Client, target: &str) -> Result<Option<Finding>> {
     //
     // src: https://twitter.com/RandoriAttack/status/1509298490106593283
 
-    let test_vector_400 = "class.module.classLoader.URLs%5B0%5D=0";
-    let test_vector_not_400 = "class.module.classXLoader.URLs%5B0%5D=0";
+    let test_400_post = "class.module.classLoader.URLs%5B0%5D=0";
+    let test_not_400_post = "class.module.classXLoader.URLs%5B0%5D=0";
+    let test_400_get = [("class.module.classLoader.URLs[0]", "0")];
+    let test_not_400_get = [("class.module.classXLoader.URLs[0]", "0")];
 
     // test GET request
 
-    let res_400 = do_get_request(client, target, test_vector_400).await?;
+    let res_400 = do_get_request(client, target, &test_400_get).await?;
     log::debug!("[{}] GET response code -> {}", target, res_400.status());
 
     if res_400.status() == StatusCode::BAD_REQUEST {
         // we got a 400 response lets check if it was a fp by sending a
         // invalid input vector
-        let res_not_400 = do_get_request(client, target, test_vector_not_400).await?;
+        let res_not_400 = do_get_request(client, target, &test_not_400_get).await?;
 
         log::debug!("[{}] GET response code -> {}", target, res_not_400.status());
         if res_not_400.status() != StatusCode::BAD_REQUEST {
@@ -64,13 +69,13 @@ async fn check(client: &Client, target: &str) -> Result<Option<Finding>> {
 
     // test POST request
 
-    let res_400 = do_post_request(client, target, test_vector_400).await?;
+    let res_400 = do_post_request(client, target, test_400_post).await?;
     log::debug!("[{}] POST response code -> {}", target, res_400.status());
 
     if res_400.status() == StatusCode::BAD_REQUEST {
         // we got a 400 response lets check if it was a fp by sending a
         // invalid input vector
-        let res_not_400 = do_post_request(client, target, test_vector_not_400).await?;
+        let res_not_400 = do_post_request(client, target, test_not_400_post).await?;
 
         log::debug!(
             "[{}] POST response code -> {}",
@@ -85,7 +90,6 @@ async fn check(client: &Client, target: &str) -> Result<Option<Finding>> {
     Ok(None)
 }
 
-//#[async_std::main]
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::init();
@@ -95,20 +99,20 @@ async fn main() -> Result<()> {
     let num_tasks: u16 = args.get(1).unwrap_or(&"10".into()).parse()?;
 
     let client = ClientBuilder::new()
-            .user_agent(USER_AGENT)
-            .danger_accept_invalid_certs(true)
-            .danger_accept_invalid_hostnames(true)
-            .build()?;
+        .timeout(Duration::from_secs(15))
+        .user_agent(USER_AGENT)
+        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_hostnames(true)
+        .build()?;
 
     let clients_stream = stream::iter(std::iter::repeat(1).map(|_| client.clone()));
 
     // read targets from stdin
-    let reader = io::BufReader::new(io::stdin());
-    let targets_stream = reader.lines();
+    let targets_stream = LinesStream::new(io::BufReader::new(io::stdin()).lines());
 
     // just do it
     let findings = clients_stream
-        .zip(LinesStream::new(targets_stream))
+        .zip(targets_stream)
         .map(|(client, target)| async move {
             match check(&client, target.as_ref().unwrap()).await {
                 // filter out all errors
@@ -122,10 +126,10 @@ async fn main() -> Result<()> {
         .buffer_unordered(num_tasks as usize)
         .flat_map(stream::iter)
         .inspect(|finding| {
-             match finding {
+            match finding {
                 Finding::Get(url) => log::info!("Found: GET {}", url),
                 Finding::Post(url) => log::info!("Found: POST {}", url),
-             };
+            };
         })
         .collect::<Vec<Finding>>()
         .await;
