@@ -1,15 +1,21 @@
 use std::time::Duration;
 
-use futures::stream::{self, StreamExt};
 use reqwest::{Client, ClientBuilder, Response, StatusCode};
-use tokio::io::{self, AsyncBufReadExt};
+
+use futures::stream::{self, StreamExt};
+
+use tokio::{
+    fs,
+    io::{self, AsyncBufReadExt}
+};
 use tokio_stream::wrappers::LinesStream;
 
-// Usage:
-//   cat targets.lst| cargo run -- 20
-//   cat targets.lst| RUST_LOG='spring4shell_scanner=Debug' cargo run -- 20
+use clap::Parser;
+
+
 
 const USER_AGENT: &str = "spring4shell-scanner";
+const RUST_LOG: &str = "RUST_LOG";
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Sync + Send>>;
 
@@ -18,6 +24,32 @@ enum Finding {
     Get(String),
     Post(String),
 }
+
+#[derive(Parser, Debug)]
+#[clap(version, about)]
+struct Args {
+    #[clap(short, long,
+           default_value_t = 10,
+           help = "Number of requests run concurrently")]
+    num_tasks: u32,
+
+    #[clap(short, long,
+           default_value_t = 15,
+           help = "Maximal number of seconds till request timeout"
+           )]
+    timeout:   u32,
+
+    #[clap(short, long,
+           default_value = "error",
+           help = "Pass RUST_LOG (from env_logger crate) via cli. \
+           Supported:\nerror, warn, info, debug and trace")]
+    rust_log:  String,
+
+    #[clap(short = 'i', long, required = true,
+           help = "Target file with urls to check, each url in a new line.")]
+    targets: String,
+}
+
 
 async fn do_post_request(client: &Client, target: &str, vector: &str) -> Result<Response> {
     let res = client
@@ -90,16 +122,18 @@ async fn check(client: &Client, target: &str) -> Result<Option<Finding>> {
     Ok(None)
 }
 
+
 #[tokio::main]
 async fn main() -> Result<()> {
+
+    let args = Args::parse();
+    if std::env::var(RUST_LOG).is_err() {
+        std::env::set_var(RUST_LOG, args.rust_log);
+    }
     env_logger::init();
 
-    // args parsing
-    let args: Vec<String> = std::env::args().collect();
-    let num_tasks: u16 = args.get(1).unwrap_or(&"10".into()).parse()?;
-
     let client = ClientBuilder::new()
-        .timeout(Duration::from_secs(15))
+        .timeout(Duration::from_secs(args.timeout as u64))
         .user_agent(USER_AGENT)
         .danger_accept_invalid_certs(true)
         .danger_accept_invalid_hostnames(true)
@@ -107,8 +141,9 @@ async fn main() -> Result<()> {
 
     let clients_stream = stream::iter(std::iter::repeat(1).map(|_| client.clone()));
 
-    // read targets from stdin
-    let targets_stream = LinesStream::new(io::BufReader::new(io::stdin()).lines());
+    let reader = io::BufReader::new(fs::File::open(args.targets).await?);
+    let targets_stream = LinesStream::new(reader.lines());
+
 
     // just do it
     let findings = clients_stream
@@ -123,8 +158,9 @@ async fn main() -> Result<()> {
                 }
             }
         })
-        .buffer_unordered(num_tasks as usize)
-        .flat_map(stream::iter)
+        .buffer_unordered(args.num_tasks as usize)
+        .inspect(|_| print!(".")) // progress indicator
+        .flat_map(stream::iter)   // filer out None
         .inspect(|finding| {
             match finding {
                 Finding::Get(url) => log::info!("Found: GET {}", url),
@@ -134,7 +170,7 @@ async fn main() -> Result<()> {
         .collect::<Vec<Finding>>()
         .await;
 
-    println!("Final Result List:");
+    println!("\n[+] Final Result List:");
     for finding in &findings {
         match finding {
             Finding::Get(url) => println!("GET {}", url),
